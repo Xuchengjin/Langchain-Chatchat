@@ -376,7 +376,33 @@ def get_Embeddings(
                 openai_proxy=model_info.get("api_proxy"),
             )
         if model_info.get("platform_type") == "openai":
-            return OpenAIEmbeddings(**params)
+            api_base_url = model_info.get("api_base_url") or ""
+            if "dashscope.aliyuncs.com" not in api_base_url:
+                return OpenAIEmbeddings(**params)
+
+            # DashScope OpenAI-compatible embeddings reject the tokenized path
+            # inside langchain_openai 0.0.x. Send raw strings directly instead.
+            params.setdefault("chunk_size", 10)
+
+            class DashScopeEmbeddings(OpenAIEmbeddings):
+                def embed_documents(self, texts, chunk_size=None):
+                    chunk_size_ = chunk_size or self.chunk_size
+                    client_kwargs = dict(self._invocation_params)
+                    client_kwargs.setdefault("model", self.model)
+
+                    vectors = []
+                    for i in range(0, len(texts), chunk_size_):
+                        resp = self.client.create(
+                            input=texts[i:i + chunk_size_],
+                            **client_kwargs,
+                        )
+                        vectors.extend(item.embedding for item in resp.data)
+                    return vectors
+
+                def embed_query(self, text):
+                    return self.embed_documents([text])[0]
+
+            return DashScopeEmbeddings(**params)
         elif model_info.get("platform_type") == "ollama":
             return OllamaEmbeddings(
                 base_url=model_info.get("api_base_url").replace("/v1", ""),

@@ -105,7 +105,7 @@ async def openai_request(
             logger.error(f"openai request error: {e}")
             yield {"data": json.dumps({"error": str(e)})}
 
-    params = body.model_dump(exclude_unset=True)
+    params = body.model_dump(exclude_unset=True, by_alias=True)
     if params.get("max_tokens") == 0:
         params["max_tokens"] = Settings.model_settings.MAX_TOKENS
 
@@ -167,7 +167,7 @@ async def create_embeddings(
     request: Request,
     body: OpenAIEmbeddingsInput,
 ):
-    params = body.model_dump(exclude_unset=True)
+    params = body.model_dump(exclude_unset=True, by_alias=True)
     client = get_OpenAIClient(model_name=body.model)
     return (await client.embeddings.create(**params)).model_dump()
 
